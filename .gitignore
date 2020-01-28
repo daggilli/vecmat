@@ -1,0 +1,4 @@
+vecmat
+*.o
+*.d
+.vscode
