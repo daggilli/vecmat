@@ -197,5 +197,21 @@ int main() {
 
   std::cout << k.determinant() << '\n';
 
+  VecMat::Vector<std::complex<double>> cv = {1.0 + 0.5i, 1.0i, 3.0 - 2.0i};
+
+  std::cout << cv.norm() << '\n';
+  std::cout << cv.rms() << '\n';
+  std::cout << cv.mean() << '\n';
+  std::cout << cv.stddev() << '\n';
+  std::cout << cv.variance() << '\n';
+  VecMat::Vector<int> v = {1, 2, 3, 4, 5};
+
+  std::cout << v.stddev() << '\n';
+
+  VecMat::Matrix<double> s = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+
+  std::cout << s * 4.3 << '\n';
+
+  std::cout << s + s << '\n';
   return 0;
 }

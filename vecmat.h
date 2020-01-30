@@ -48,6 +48,21 @@ namespace VecMat {
     const double norm() const {
       return std::sqrt(std::accumulate(vec, vec + sz, 0.0, [](const T& s, const T& v) { return s + v * v; }));
     }
+    const T mean() const { return std::accumulate(vec, vec + sz, zero) / static_cast<double>(sz); }
+    const double variance() const {
+      auto avg = mean();
+      return std::accumulate(vec, vec + sz, 0.0,
+                             [&avg](const double s, const T& v) {
+                               auto diff = std::abs(avg - v);
+                               return s + diff * diff;
+                             }) /
+             static_cast<double>(sz - 1);
+    }
+    const double stddev() const { return std::sqrt(variance()); }
+    const T rms() const {
+      return std::sqrt(std::accumulate(vec, vec + sz, zero, [](const T& s, const T& v) { return s + v * v; }) /
+                       static_cast<double>(sz));
+    }
     Vector<T>& operator=(const Vector<T>& v) {
       if (&v != this) {
         if (sz != v.sz) {
@@ -251,6 +266,17 @@ namespace VecMat {
     }
     T* operator[](const std::size_t i) { return mat[i]; }
     const T* operator[](const std::size_t i) const { return mat[i]; }
+    friend Matrix<T> operator+(const Matrix<T>& lhs, const Matrix<T>& rhs) {
+      checkEqualDimensions(lhs, rhs);
+      Matrix<T> ma(lhs.size());
+
+      for (auto i = 0; i < lhs.size().first; i++) {
+        for (auto j = 0; j < lhs.size().second; j++) {
+          ma[i][j] = lhs[i][j] + rhs[i][j];
+        }
+      }
+      return ma;
+    }
     friend Matrix<T> operator*(const Matrix<T>& lhs, const Matrix<T>& rhs) {
       checkDimensions(lhs, rhs);
       auto lr = lhs.size().first;
@@ -287,6 +313,18 @@ namespace VecMat {
       }
       return vec;
     }
+    friend Matrix<T> operator*(const Matrix<T>& lhs, const T scal) {
+      Matrix<T> ma(lhs.size());
+
+      for (auto i = 0; i < lhs.size().first; i++) {
+        for (auto j = 0; j < lhs.size().second; j++) {
+          ma[i][j] = lhs[i][j] * scal;
+        }
+      }
+
+      return ma;
+    }
+    friend Matrix<T> operator*(const T scal, const Matrix<T>& lhs) { return lhs * scal; }
     friend std::ostream& operator<<(std::ostream& os, const Matrix<T>& m) {
       if (m.rows()) {
         std::string lf = "";
@@ -328,7 +366,7 @@ namespace VecMat {
       }
     }
     static void checkEqualDimensions(const Matrix<T>& left, const Matrix<T>& right) {
-      if (left.size().first != right.size().first || left.size().second != right.size().sexond) {
+      if (left.size().first != right.size().first || left.size().second != right.size().second) {
         throw(std::runtime_error("Matrix + matrix length mismatch"));
       }
     }
