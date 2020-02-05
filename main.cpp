@@ -1,11 +1,48 @@
+#include <cmath>
 #include <complex>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <vector>
 
 #include "vecmat.h"
 
 using namespace std::complex_literals;
+
+double gen(const std::size_t i);
+
+template <typename T>
+class DerivedFunctor : public VecMat::MatrixGeneratorFunctor<T> {
+ public:
+  const T operator()(const std::size_t i, const std::size_t j) const {
+    return std::sqrt(std::pow(static_cast<double>(i + 3), (static_cast<double>(j) - 1)));
+  }
+};
+
+class DoubleFunctor : public VecMat::MatrixGeneratorFunctor<double> {
+ public:
+  DoubleFunctor() : count(0) {}
+  const double operator()(const std::size_t i, const std::size_t j) const {
+    count++;
+    return count;
+  }
+
+ private:
+  mutable std::size_t count;
+};
+
+template <typename T>
+class OrderedPair : private std::pair<T, T> {
+ public:
+  OrderedPair() {}
+  OrderedPair(std::pair<T, T> p) : std::pair<T, T>(p) {}
+  using std::pair<T, T>::first;
+  using std::pair<T, T>::second;
+  friend std::ostream& operator<<(std::ostream& os, const OrderedPair<T>& v) {
+    os << "[" << v.first << ", " << v.second << "]";
+    return os;
+  }
+};
 
 int main() {
   /*
@@ -195,7 +232,7 @@ int main() {
                               {0.267538, 0.600714, -0.0252267, 0.589941, -0.223907, 0.786855, 0.329574, -0.863015},
                               {0.228132, -0.218749, 0.945731, -0.262868, 0.985404, 0.425773, -0.585217, 0.294802}};
 
-  std::cout << k.determinant() << '\n';
+  std::cout << "K DET: " << k.determinant() << '\n';
 
   VecMat::Vector<std::complex<double>> cv = {1.0 + 0.5i, 1.0i, 3.0 - 2.0i};
 
@@ -213,5 +250,75 @@ int main() {
   std::cout << s * 4.3 << '\n';
 
   std::cout << s + s << '\n';
+
+  VecMat::Matrix<long double> t = {{5, 7, 9}, {4, 3, 8}, {7, 5, 6}};
+  auto ti = t.inverse();
+
+  std::cout << "T INV:\n" << ti << '\n';
+
+  std::cout << k.inverse() << "\n";
+  // std::cout << t * ti << "\n";
+  /*
+    VecMat::Matrix<double> ss = {{1, 4}, {3, 8}};
+
+    std::cout << ss.inverse() << "\n";*/
+
+  VecMat::Vector<double> vf(4, gen);
+
+  std::cout << vf << "\n";
+
+  auto gl = [](const std::size_t i) -> double { return std::sqrt(3.0 * i + 7); };
+
+  VecMat::Vector<double> vl(4, gl);
+
+  std::cout << vl << "\n";
+
+  auto mgl = [](const std::size_t i, const std::size_t j) -> double {
+    return static_cast<double>(i * i + 1) / static_cast<double>(j + 1);
+  };
+
+  VecMat::Matrix<double> ml(3, mgl);
+
+  std::cout << ml << "\n";
+
+  DoubleFunctor f;
+
+  VecMat::Matrix<double> mff(3, f);
+
+  std::cout << mff << "\n";
+
+  std::cout << mff(1, 2) << "\n";
+
+  mff(2, 1) = 13;
+
+  std::cout << mff << "\n";
+
+  VecMat::Matrix<OrderedPair<int>> mal(
+      3, [](const std::size_t i, const std::size_t j) { return OrderedPair<int>(std::make_pair(i, j)); });
+
+  std::cout << "[" << mal[0][1].first << ", " << mal[0][1].second << "]\n";
+  std::cout << mal[1][2] << "\n";
+
+  std::cout << mal << "\n";
+  // std::cout << mal << "\n";
+  /* std::random_device r;
+  std::default_random_engine eng(r());
+  std::uniform_real_distribution<double> ud(0.1, 1.1);
+
+  std::cout << ud(eng) << "\n";
+
+  auto e = std::bind(ud, eng);
+
+  std::cout << e() << "\n";
+
+  VecMat::Matrix<double> mrd(500, std::bind(ud, eng));
+
+  // std::cout << mrd << "\n";
+
+  std::cout << mrd.determinant() << "\n";
+
+  std::cout << mrd * mrd.inverse() << "\n"; */
   return 0;
 }
+
+double gen(const std::size_t i) { return i * i + 1; }

@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <initializer_list>
 #include <iostream>
 #include <numeric>
@@ -20,6 +21,15 @@ namespace VecMat {
   class Matrix;
 
   template <typename T>
+  using VectorGenerator = std::function<T(const std::size_t index)>;
+
+  template <typename T>
+  class VectorGeneratorFunctor {
+   public:
+    virtual const T operator()(const std::size_t index) const = 0;
+  };
+
+  template <typename T>
   class Vector {
    public:
     using iterator = T*;
@@ -29,6 +39,10 @@ namespace VecMat {
 
     Vector() : vec(nullptr), sz(0), zero(0.0) {}
     Vector(const std::size_t n) : vec(new T[n]), sz(n), zero(0.0) {}
+    Vector(const std::size_t n, VectorGenerator<T> gen) : vec(new T[n]()), sz(n), zero(0.0) {
+      for (auto i = 0; i < n; i++) vec[i] = gen(i);
+    }
+
     Vector(const std::initializer_list<T> vlist) : vec(new T[vlist.size()]), sz(vlist.size()), zero(0.0) {
       std::size_t ix = 0;
 
@@ -38,31 +52,11 @@ namespace VecMat {
     }
     Vector(const Vector<T>& v) : vec(new T[v.sz]), sz(v.sz), zero(v.zero) { std::copy(v.vec, v.vec + sz, vec); }
     Vector(Vector<T>&& v) : vec(std::exchange(v.vec, nullptr)), sz(std::exchange(v.sz, 0)), zero(v.zero) {}
-    ~Vector() { delete[] vec; }
-    std::size_t size() const { return sz; }
-    const T total() const { return std::accumulate(vec, vec + sz, zero); }
-    const Vector<T> conj() const {
-      Vector<T> v(this);
-      return v;
-    }
-    const double norm() const {
-      return std::sqrt(std::accumulate(vec, vec + sz, 0.0, [](const T& s, const T& v) { return s + v * v; }));
-    }
-    const T mean() const { return std::accumulate(vec, vec + sz, zero) / static_cast<double>(sz); }
-    const double variance() const {
-      auto avg = mean();
-      return std::accumulate(vec, vec + sz, 0.0,
-                             [&avg](const double s, const T& v) {
-                               auto diff = std::abs(avg - v);
-                               return s + diff * diff;
-                             }) /
-             static_cast<double>(sz - 1);
-    }
-    const double stddev() const { return std::sqrt(variance()); }
-    const T rms() const {
-      return std::sqrt(std::accumulate(vec, vec + sz, zero, [](const T& s, const T& v) { return s + v * v; }) /
-                       static_cast<double>(sz));
-    }
+    virtual ~Vector() { delete[] vec; }
+    T& operator[](const std::size_t i) { return vec[i]; }
+    const T& operator[](const std::size_t i) const { return vec[i]; }
+    T& operator()(const std::size_t i) { return vec[i]; }
+    const T& operator()(const std::size_t i) const { return vec[i]; }
     Vector<T>& operator=(const Vector<T>& v) {
       if (&v != this) {
         if (sz != v.sz) {
@@ -82,9 +76,6 @@ namespace VecMat {
       }
       return *this;
     }
-    T& operator[](const std::size_t i) { return vec[i]; }
-    const T& operator[](const std::size_t i) const { return vec[i]; }
-
     friend Vector<T> operator+(const Vector<T>& lhs, const Vector<T>& rhs) {
       checkDimensions(lhs, rhs);
       Vector<T> v(lhs.size());
@@ -158,6 +149,30 @@ namespace VecMat {
       os << "|";
       return os;
     }
+    std::size_t size() const { return sz; }
+    const T total() const { return std::accumulate(vec, vec + sz, zero); }
+    const Vector<T> conj() const {
+      Vector<T> v(this);
+      return v;
+    }
+    const double norm() const {
+      return std::sqrt(std::accumulate(vec, vec + sz, 0.0, [](const T& s, const T& v) { return s + v * v; }));
+    }
+    const T mean() const { return std::accumulate(vec, vec + sz, zero) / static_cast<double>(sz); }
+    const double variance() const {
+      auto avg = mean();
+      return std::accumulate(vec, vec + sz, 0.0,
+                             [&avg](const double s, const T& v) {
+                               auto diff = std::abs(avg - v);
+                               return s + diff * diff;
+                             }) /
+             static_cast<double>(sz - 1);
+    }
+    const double stddev() const { return std::sqrt(variance()); }
+    const T rms() const {
+      return std::sqrt(std::accumulate(vec, vec + sz, zero, [](const T& s, const T& v) { return s + v * v; }) /
+                       static_cast<double>(sz));
+    }
 
     inline iterator begin() noexcept { return vec; }
     inline const_iterator cbegin() const noexcept { return vec; }
@@ -182,7 +197,7 @@ namespace VecMat {
     T* vec;
     std::size_t sz;
     T zero;
-  };
+  };  // class Vector
 
   template <>
   const inline Vector<std::complex<double>> Vector<std::complex<double>>::conj() const {
@@ -209,6 +224,15 @@ namespace VecMat {
   }
 
   template <typename T>
+  using MatrixGenerator = std::function<T(const std::size_t, const std::size_t)>;
+
+  template <typename T>
+  class MatrixGeneratorFunctor {
+   public:
+    virtual const T operator()(const std::size_t i, const std::size_t j) const = 0;
+  };
+
+  template <typename T>
   class Matrix {
     using iterator = T**;
     using const_iterator = const T**;
@@ -219,14 +243,34 @@ namespace VecMat {
     Matrix(const std::size_t n) : m(n), n(n), data(new T[n * n]), mat(new T*[n]) {
       for (auto i = 0; i < n; i++) mat[i] = data + i * n;
     }
+    Matrix(const std::size_t n, MatrixGenerator<T> gen) : m(n), n(n), data(new T[n * n]), mat(new T*[n]) {
+      std::size_t ix = 0;
+      for (auto i = 0; i < n; i++) {
+        mat[i] = data + i * n;
+        for (auto j = 0; j < n; j++) data[ix++] = gen(i, j);
+      }
+    }
     Matrix(const std::size_t m, const std::size_t n) : m(m), n(n), data(new T[m * n]), mat(new T*[m]) {
-      std::cout << "rc ctor " << m << " x " << n << "\n";
       for (auto i = 0; i < m; i++) mat[i] = data + i * n;
+    }
+    Matrix(const std::size_t m, const std::size_t n, MatrixGenerator<T> gen) : m(m), n(n), data(new T[m * n]), mat(new T*[m]) {
+      std::size_t ix = 0;
+      for (auto i = 0; i < m; i++) {
+        mat[i] = data + i * n;
+        for (auto j = 0; j < n; j++) data[ix++] = gen(i, j);
+      }
     }
     Matrix(const std::pair<std::size_t, std::size_t>& sz)
         : m(sz.first), n(sz.second), data(new T[sz.first * sz.first]), mat(new T*[sz.first]) {
-      std::cout << "rc sz ctor " << m << " x " << n << "\n";
       for (auto i = 0; i < m; i++) mat[i] = data + i * n;
+    }
+    Matrix(const std::pair<std::size_t, std::size_t>& sz, MatrixGenerator<T> gen)
+        : m(sz.first), n(sz.second), data(new T[sz.first * sz.first]), mat(new T*[sz.first]) {
+      std::size_t ix = 0;
+      for (auto i = 0; i < m; i++) {
+        mat[i] = data + i * n;
+        for (auto j = 0; j < n; j++) data[ix++] = gen(i, j);
+      }
     }
     Matrix(const std::initializer_list<std::initializer_list<T>> mlist)
         : m(mlist.size()), n(0), data(nullptr), mat(new T*[mlist.size()]) {
@@ -234,7 +278,7 @@ namespace VecMat {
       std::size_t jx;
       n = mlist.begin()->size();
       data = new T[m * n];
-      std::cout << "il ctor " << m << " x " << n << "\n";
+
       for (auto& r : mlist) {
         jx = 0;
         for (auto& el : r) {
@@ -243,29 +287,15 @@ namespace VecMat {
         mat[ix++] = data + ix * n;
       }
     }
-    ~Matrix() {
+    virtual ~Matrix() {
       delete[] mat;
       delete[] data;
     }
     const std::pair<std::size_t, std::size_t> size() const { return std::make_pair(m, n); }
-    const std::size_t rows() const { return m; }
-    const std::size_t cols() const { return n; }
-    const bool isSquare() { return m == n; }
-    const T trace() const {
-      T tr = 0;
-      for (std::size_t i = 0; i < std::min(m, n); i++) tr += mat[i][i];
-      return tr;
-    }
-    const T determinant() const {
-      checkSquare();
-      x3 = 0;
-      if (m >= GAUSS_ELIM_DET_THRESHOLD) return gaussDet(mat, m);
-      auto d = rdet(mat, m);
-      std::cout << "3x3: " << x3 << "\n";
-      return d;
-    }
     T* operator[](const std::size_t i) { return mat[i]; }
     const T* operator[](const std::size_t i) const { return mat[i]; }
+    T& operator()(const std::size_t i, const std::size_t j) { return data[i * n + j]; }
+    const T& operator()(const std::size_t i, const std::size_t j) const { return data[i * n + j]; }
     friend Matrix<T> operator+(const Matrix<T>& lhs, const Matrix<T>& rhs) {
       checkEqualDimensions(lhs, rhs);
       Matrix<T> ma(lhs.size());
@@ -284,7 +314,6 @@ namespace VecMat {
       auto rr = rhs.size().first;
       auto rc = rhs.size().second;
 
-      std::cout << "lr " << lr << " lc " << lc << " rc " << rc << "\n";
       Matrix<T> ma(lr, rc);
       for (auto i = 0; i < lr; i++) {
         auto lv = lhs[i];
@@ -299,7 +328,6 @@ namespace VecMat {
       return ma;
     }
     friend Vector<T> operator*(const Matrix<T>& m, const Vector<T>& v) {
-      std::cout << "op * m x v " << m.size().first << " " << m.size().second << " | " << v.size() << '\n';
       checkDimensions(m, v);
       std::size_t mr = m.size().first;
       std::size_t mc = v.size();
@@ -344,15 +372,33 @@ namespace VecMat {
         os << "||";
       return os;
     }
+    const std::size_t rows() const { return m; }
+    const std::size_t cols() const { return n; }
+    const bool isSquare() { return m == n; }
+    const T trace() const {
+      T tr = 0;
+      for (std::size_t i = 0; i < std::min(m, n); i++) tr += mat[i][i];
+      return tr;
+    }
+    const T determinant() const {
+      checkSquare();
+      x3 = 0;
+      if (m >= GAUSS_ELIM_DET_THRESHOLD) return gaussDet();
+      return rdet(mat, m);
+    }
+    const Matrix<T> inverse() const {
+      if (m < 4) return invert();
+      return gaussInvert();
+    }
 
     inline iterator begin() noexcept { return mat; }
-    inline const_iterator cbegin() const noexcept { return const_cast<const double**>(mat); }
+    inline const_iterator cbegin() const noexcept { return const_cast<const T**>(mat); }
     inline iterator end() noexcept { return mat + m; }
-    inline const_iterator cend() const noexcept { return const_cast<const double**>(mat + m); }
+    inline const_iterator cend() const noexcept { return const_cast<const T**>(mat + m); }
     inline reverse_iterator rbegin() noexcept { return mat + m; }
-    inline reverse_iterator crbegin() const noexcept { return const_cast<const double**>(mat + m); }
+    inline reverse_iterator crbegin() const noexcept { return const_cast<const T**>(mat + m); }
     inline reverse_iterator rend() noexcept { return mat; }
-    inline reverse_iterator crend() const noexcept { return const_cast<const double**>(mat); }
+    inline reverse_iterator crend() const noexcept { return const_cast<const T**>(mat); }
 
    private:
     static void checkDimensions(const Matrix<T>& left, const Matrix<T>& right) {
@@ -427,46 +473,147 @@ namespace VecMat {
       }
     }
 
-    const T gaussDet(T** const msub, const std::size_t sz) const {
+    const T gaussDet() const {
       T det(1);
-      T* ad = new T[sz * sz];
-      T** a = new T*[sz];
-      std::copy(data, data + sz * sz, ad);
-      for (auto i = 0; i < sz; i++) a[i] = ad + i * sz;
+      T* ad = new T[m * m];
+      T** a = new T*[m];
+      std::copy(data, data + m * m, ad);
+      for (auto i = 0; i < m; i++) a[i] = ad + i * m;
 
       uint parity = 0;
 
-      for (auto i = 0; i < sz; i++) {
-        for (auto k = i + 1; k < sz; k++) {
+      for (auto i = 0; i < m; i++) {
+        for (auto k = i + 1; k < m; k++) {
           if (std::abs(a[i][i]) < std::abs(a[k][i])) {
             parity ^= 1;
-            for (auto j = 0; j < sz; j++) {
+            for (auto j = 0; j < m; j++) {
               std::swap(a[i][j], a[k][j]);
             }
           }
         }
       }
 
-      for (auto i = 0; i < sz - 1; i++) {
-        for (auto k = i + 1; k < sz; k++) {
+      for (auto i = 0; i < m - 1; i++) {
+        for (auto k = i + 1; k < m; k++) {
           T t = a[k][i] / a[i][i];
-          for (auto j = 0; j < sz; j++) {
+          for (auto j = 0; j < m; j++) {
             a[k][j] = a[k][j] - t * a[i][j];
           }
         }
       }
 
-      for (auto i = 0; i < sz; i++) det *= a[i][i];
+      for (auto i = 0; i < m; i++) det *= a[i][i];
 
+      delete[] a;
+      delete[] ad;
       return parity ? -det : det;
     }
+
+    const Matrix<T> invert() const {
+      Matrix<T> ma(size());
+
+      if (m == 1) {
+        ma.data[0] = 1 / data[0];
+      } else if (m == 2) {
+        T idet = 1 / (data[0] * data[3] - data[1] * data[2]);
+        ma.data[0] = data[3] * idet;
+        ma.data[1] = -data[1] * idet;
+        ma.data[2] = -data[2] * idet;
+        ma.data[3] = data[0] * idet;
+      } else if (m == 3) {
+        T idet = 1 / (data[0] * (data[4] * data[8] - data[5] * data[7]) + data[1] * (data[5] * data[6] - data[3] * data[8]) +
+                      data[2] * (data[3] * data[7] - data[4] * data[6]));
+        ma.data[0] = idet * (data[4] * data[8] - data[5] * data[7]);
+        ma.data[1] = idet * (data[2] * data[7] - data[1] * data[8]);
+        ma.data[2] = idet * (data[1] * data[5] - data[2] * data[4]);
+        ma.data[3] = idet * (data[5] * data[6] - data[3] * data[8]);
+        ma.data[4] = idet * (data[0] * data[8] - data[2] * data[6]);
+        ma.data[5] = idet * (data[2] * data[3] - data[0] * data[5]);
+        ma.data[6] = idet * (data[3] * data[7] - data[4] * data[6]);
+        ma.data[7] = idet * (data[1] * data[6] - data[0] * data[7]);
+        ma.data[8] = idet * (data[0] * data[4] - data[1] * data[3]);
+      }
+
+      return ma;
+    }
+
+    const Matrix<T> gaussInvert() const {
+      Matrix<T> ma(size());
+
+      std::size_t wd = 2 * m;
+      T* ad = new T[m * wd]();
+      T** a = new T*[m];
+      for (auto i = 0; i < m; i++) {
+        a[i] = ad + i * wd;
+        std::copy(data + i * m, data + i * m + m, ad + i * wd);
+        ad[i * wd + m + i] = T(1);
+      }
+
+      for (auto i = m - 1; i > 0; i--) {
+        if (a[i - 1][0] < a[i][0]) {
+          std::swap(a[i], a[i - 1]);
+        }
+      }
+
+      for (auto i = 0; i < m; i++) {
+        for (auto j = 0; j < m; j++) {
+          if (i != j) {
+            T t = a[j][i] / a[i][i];
+            for (auto k = 0; k < wd; k++) {
+              a[j][k] -= a[i][k] * t;
+            }
+          }
+        }
+      }
+
+      for (auto i = 0; i < m; i++) {
+        T t = a[i][i];
+        for (auto j = m; j < wd; j++) {
+          ma.mat[i][j - m] = a[i][j] / t;
+        }
+      }
+
+      return ma;
+    }
+
+#ifndef NODEBUG
+    void dump(T* d, const std::size_t r, const std::size_t c) const {
+      std::string sep, lf;
+      for (auto i = 0; i < r; i++) {
+        sep = "";
+        std::cout << lf << "|";
+        for (auto j = 0; j < c; j++) {
+          std::cout << sep << d[i * c + j];
+          sep = " ";
+        }
+        std::cout << "|";
+        lf = "\n";
+      }
+      std::cout << '\n';
+    }
+
+    void dump(T** d, const std::size_t r, const std::size_t c) const {
+      std::string sep, lf;
+      for (auto i = 0; i < r; i++) {
+        sep = "";
+        std::cout << lf << "|";
+        for (auto j = 0; j < c; j++) {
+          std::cout << sep << d[i][j];
+          sep = " ";
+        }
+        std::cout << "|";
+        lf = "\n";
+      }
+      std::cout << '\n';
+    }
+#endif
 
     std::size_t m;
     std::size_t n;
     T* data;
     T** mat;
     mutable uint x3;
-  };  // namespace VecMat
+  };  // class Matrix
 
   template <typename T>
   const inline Matrix<T> transpose(const Matrix<T>& m) {
