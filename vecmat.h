@@ -94,12 +94,12 @@ namespace VecMat {
     }
     Vector<T>& operator+=(const Vector<T>& rhs) {
       checkDimensions(*this, rhs);
-      for (auto i = 0; i < vec.size(); i++) vec[i] += rhs.vec[i];
+      for (auto i = 0; i < sz; i++) vec[i] += rhs.vec[i];
       return *this;
     }
     Vector<T>& operator-=(const Vector<T>& rhs) {
       checkDimensions(*this, rhs);
-      for (auto i = 0; i < vec.size(); i++) vec[i] -= rhs.vec[i];
+      for (auto i = 0; i < sz; i++) vec[i] -= rhs.vec[i];
       return *this;
     }
 
@@ -219,7 +219,8 @@ namespace VecMat {
     return T(std::acos((u * v) / (u.norm() * v.norm())));
   }
 
-  const inline std::complex<double> angle(const Vector<std::complex<double>>& u, const Vector<std::complex<double>>& v) {
+  template <typename T>
+  const inline std::complex<T> angle(const Vector<std::complex<T>>& u, const Vector<std::complex<T>>& v) {
     return std::acos(u * v.conj() / (u.norm() * v.norm()));
   }
 
