@@ -1,5 +1,5 @@
-#ifndef __VECMAT_H__
-#define __VECMAT_H__
+#ifndef __TENSOR_H__
+#define __TENSOR_H__
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace VecMat {
+namespace Tensor {
   namespace {
     constexpr std::size_t GAUSS_ELIM_DET_THRESHOLD = 7;
   }
@@ -185,14 +185,18 @@ namespace VecMat {
 
    private:
     static void checkDimensions(const Vector<T>& left, const Vector<T>& right) {
-      if (left.size() != right.size()) {
+      if (!checkDimensionsNoThrow(left, right)) {
         throw(std::runtime_error("Vector x vector length mismatch"));
       }
     }
     static void checkDimensions(const Vector<T>& left, const Matrix<T>& right) {
-      if (left.size() != right.size().first) {
+      if (!checkDimensionsNoThrow(left, right)) {
         throw(std::runtime_error("Vector x matrix length mismatch"));
       }
+    }
+    static bool checkDimensionsNoThrow(const Vector<T>& left, const Vector<T>& right) { return left.size() == right.size(); }
+    static bool checkDimensionsnoThrow(const Vector<T>& left, const Matrix<T>& right) {
+      return left.size() == right.size().first;
     }
     T* vec;
     std::size_t sz;
@@ -403,25 +407,31 @@ namespace VecMat {
 
    private:
     static void checkDimensions(const Matrix<T>& left, const Matrix<T>& right) {
-      if (left.size().second != right.size().first) {
+      if (!checkDimensionsNoThrow(left, right)) {
         throw(std::runtime_error("Matrix x matrix length mismatch"));
       }
     }
     static void checkDimensions(const Matrix<T>& m, const Vector<T>& v) {
-      if (m.size().second != v.size()) {
+      if (!checkDimensionsNoThrow(m, v)) {
         throw(std::runtime_error("Matrix x vector length mismatch"));
       }
     }
     static void checkEqualDimensions(const Matrix<T>& left, const Matrix<T>& right) {
-      if (left.size().first != right.size().first || left.size().second != right.size().second) {
+      if (!checkEqualDimensionsNoThrow(left, right)) {
         throw(std::runtime_error("Matrix + matrix length mismatch"));
       }
     }
     const void checkSquare() const {
-      if (m != n) {
+      if (!checkSquareNoThrow()) {
         throw(std::runtime_error("Matrix not square"));
       }
     }
+    static bool checkDimensionsNoThrow(const Matrix<T>& left, const Matrix<T>& right) { return left.cols() == right.rows(); }
+    static bool checkDimensionsNoThrow(const Matrix<T>& m, const Vector<T>& v) { return m.cols() == v.size(); }
+    static bool checkEqualDimensionsNoThrow(const Matrix<T>& left, const Matrix<T>& right) {
+      return left.rows() == right.rows() && left.cols() == right.cols();
+    }
+    const bool checkSquareNoThrow() const { return m == n; }
     const T rdet(T** const msub, const std::size_t sz) const {
       T det(0);
       if (sz < 1) {
@@ -651,5 +661,5 @@ namespace VecMat {
 
     return ma;
   }
-}  // namespace VecMat
+}  // namespace Tensor
 #endif
